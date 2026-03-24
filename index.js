@@ -5,7 +5,9 @@ const qrcode = require('qrcode-terminal');
 const pino = require('pino');
 const http = require('http');
 
-// Servidor fake obrigatório pro Render
+const PHONE_NUMBER = "5562981573734";   // ← Seu número com 55 + DDD + número
+
+// Servidor fake para o Render
 http.createServer((req, res) => res.end('Bot rodando')).listen(process.env.PORT || 10000);
 
 async function conectar() {
@@ -16,28 +18,35 @@ async function conectar() {
         printQRInTerminal: false,
         logger: pino({ level: 'silent' }),
         browser: ['Bot Figurinhas Dedão', 'Chrome', '1.0'],
-        connectTimeoutMs: 120000,      // 2 minutos
+        connectTimeoutMs: 120000,
         defaultQueryTimeoutMs: 120000,
-        keepAliveIntervalMs: 30000,
-        retryRequestDelayMs: 5000,
     });
 
-    sock.ev.on('connection.update', (update) => {
+    sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
-        if (qr) {
-            console.log('\n🔥 QR CODE GERADO:');
-            qrcode.generate(qr, { small: true });
-            console.log('\nEscaneie AGORA com o WhatsApp Business!');
+        // Tenta gerar o código de pareamento quando estiver pronto
+        if (qr || connection === 'connecting') {
+            try {
+                const code = await sock.requestPairingCode(PHONE_NUMBER);
+                console.log('\n🔑 CÓDIGO DE PAREAMENTO GERADO:');
+                console.log(code);
+                console.log('\nFaça isso no celular:');
+                console.log('1. Abra o WhatsApp Business');
+                console.log('2. Configurações → Dispositivos vinculados');
+                console.log('3. Toque em "Conectar com número de telefone"');
+                console.log('4. Digite o código acima (ex: AB12-CD34)');
+            } catch (err) {
+                console.log('Ainda não conseguiu gerar o código. Tentando novamente...');
+            }
         }
 
         if (connection === 'open') {
-            console.log('\n✅ BOT CONECTADO COM SUCESSO - MODO DEFORMAÇÃO TOTAL ATIVADO!');
+            console.log('\n✅ BOT CONECTADO COM SUCESSO VIA CÓDIGO!');
         }
 
         if (connection === 'close') {
-            const code = lastDisconnect?.error?.output?.statusCode || 'desconhecido';
-            console.log(`Conexão fechada (código ${code}). Reconectando em 10 segundos...`);
+            console.log('Conexão fechada. Reconectando em 10 segundos...');
             setTimeout(conectar, 10000);
         }
     });
@@ -59,7 +68,7 @@ async function conectar() {
 
         const isAchatado = texto === '/s' || texto.startsWith('/s ');
 
-        console.log(`📸 Criando sticker - ${isAchatado ? 'ACHATADO' : 'NORMAL'}`);
+        console.log(`📸 Modo: ${isAchatado ? 'ACHATADO' : 'NORMAL'}`);
 
         try {
             const buffer = await sock.downloadMediaMessage(msg);
