@@ -5,7 +5,7 @@ const qrcode = require('qrcode-terminal');
 const pino = require('pino');
 const http = require('http');
 
-// Servidor fake para o Render não reclamar de porta
+// Servidor fake obrigatório pro Render
 http.createServer((req, res) => res.end('Bot rodando')).listen(process.env.PORT || 10000);
 
 async function conectar() {
@@ -16,6 +16,10 @@ async function conectar() {
         printQRInTerminal: false,
         logger: pino({ level: 'silent' }),
         browser: ['Bot Figurinhas Dedão', 'Chrome', '1.0'],
+        connectTimeoutMs: 120000,      // 2 minutos
+        defaultQueryTimeoutMs: 120000,
+        keepAliveIntervalMs: 30000,
+        retryRequestDelayMs: 5000,
     });
 
     sock.ev.on('connection.update', (update) => {
@@ -24,16 +28,17 @@ async function conectar() {
         if (qr) {
             console.log('\n🔥 QR CODE GERADO:');
             qrcode.generate(qr, { small: true });
-            console.log('\nEscaneie com o WhatsApp Business agora!');
+            console.log('\nEscaneie AGORA com o WhatsApp Business!');
         }
 
         if (connection === 'open') {
-            console.log('✅ MODO DEFORMAÇÃO TOTAL ATIVADO!');
+            console.log('\n✅ BOT CONECTADO COM SUCESSO - MODO DEFORMAÇÃO TOTAL ATIVADO!');
         }
 
         if (connection === 'close') {
-            console.log('Conexão fechada. Reconectando em 8 segundos...');
-            setTimeout(conectar, 8000);
+            const code = lastDisconnect?.error?.output?.statusCode || 'desconhecido';
+            console.log(`Conexão fechada (código ${code}). Reconectando em 10 segundos...`);
+            setTimeout(conectar, 10000);
         }
     });
 
@@ -54,7 +59,7 @@ async function conectar() {
 
         const isAchatado = texto === '/s' || texto.startsWith('/s ');
 
-        console.log(`📸 Modo: ${isAchatado ? 'ACHATADO' : 'NORMAL'}`);
+        console.log(`📸 Criando sticker - ${isAchatado ? 'ACHATADO' : 'NORMAL'}`);
 
         try {
             const buffer = await sock.downloadMediaMessage(msg);
@@ -62,30 +67,21 @@ async function conectar() {
             let finalBuffer = buffer;
 
             if (isAchatado) {
-                finalBuffer = await sharp(buffer)
-                    .resize(512, 512, { fit: 'fill' })
-                    .webp({ quality: 70 })
-                    .toBuffer();
+                finalBuffer = await sharp(buffer).resize(512, 512, { fit: 'fill' }).webp({ quality: 70 }).toBuffer();
             } else {
-                finalBuffer = await sharp(buffer)
-                    .resize(512, 512, { fit: 'inside' })
-                    .webp({ quality: 80 })
-                    .toBuffer();
+                finalBuffer = await sharp(buffer).resize(512, 512, { fit: 'inside' }).webp({ quality: 80 }).toBuffer();
             }
 
             const sticker = new Sticker(finalBuffer, {
                 pack: 'Bot do',
                 author: 'Dedão',
                 type: StickerTypes.FULL,
-                categories: ['🤡'],
                 quality: 75,
             });
 
             const stickerBuffer = await sticker.toBuffer();
 
             await sock.sendMessage(from, { sticker: stickerBuffer }, { quoted: msg });
-
-            console.log('✅ Sticker enviado!');
 
         } catch (err) {
             console.error(err);
